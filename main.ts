@@ -62,8 +62,8 @@ const PROBE_TIMEOUT_MS = 5000;
 const CALL_TIMEOUT_MS = 25000;
 /** The most bytes of one client request body this server reads. */
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
-/** Attempts per candidate before the provider is blacklisted for the trial. */
-const ATTEMPTS_PER_CANDIDATE = 3;
+/** Attempts per candidate before moving to the next one: a refusal costs a call, so never retry — fail over at once. */
+const ATTEMPTS_PER_CANDIDATE = 1;
 
 const ENV_URL = (process.env.MAKEFUN_ENV_URL ?? '').replace(/\/+$/, '');
 const PROMPT_FILE = process.env.MAKEFUN_PROMPT_FILE ?? '';
@@ -290,7 +290,7 @@ async function serveWithFailover(
         upstream = await callProvider(route, clientWire, body, stream);
       } catch {
         state.consecutiveRefusals += 1;
-        if (state.consecutiveRefusals >= ATTEMPTS_PER_CANDIDATE) state.blacklisted = true;
+        if (state.consecutiveRefusals >= 2) state.blacklisted = true;
         continue;
       }
       if (upstream.status >= 200 && upstream.status < 300) {
@@ -306,7 +306,7 @@ async function serveWithFailover(
         }
         if (!refusal) break;
         state.consecutiveRefusals += 1;
-        if (state.consecutiveRefusals >= ATTEMPTS_PER_CANDIDATE) state.blacklisted = true;
+        if (state.consecutiveRefusals >= 2) state.blacklisted = true;
       }
     }
     if (delivered) return;
